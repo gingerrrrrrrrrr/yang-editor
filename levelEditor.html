@@ -1,0 +1,973 @@
+<!doctype html>
+<html>
+  <head>
+    <title>羊了个羊·关卡编辑器</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        background: #2a2a2a;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        min-height: 100vh;
+        font-family: system-ui;
+      }
+      .editor-container {
+        display: flex; /* 改成水平布局 */
+        flex-direction: row; /* 画布在左，面板在右 */
+        align-items: flex-start; /* 顶部对齐 */
+        gap: 20px; /* 画布和面板间距 */
+        background: #1a1a1a;
+        border-radius: 16px;
+        padding: 20px;
+        box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+      }
+      /* 右侧面板 */
+      .right-panel {
+        transform: scale(1.5);
+        transform-origin: top left; /* 从左上角开始放大 */
+        width: 400px; /* 宽度要相应缩小（因为放大了） */
+        display: flex;
+        flex-direction: column; /* 按钮竖着排 */
+        gap: 16px;
+        /* width: 300px; 固定宽度，方便按钮放大 */
+      }
+      canvas {
+        display: block;
+        width: 1080px;
+        height: 1920px;
+        background: #c4e0ec; /* 天蓝色，跟游戏一样 */
+        border-radius: 12px;
+        box-shadow: 0 0 0 2px #444;
+        cursor: grab;
+      }
+      canvas:active {
+        cursor: grabbing;
+      }
+      .toolbar {
+        display: flex;
+        flex-direction: column; /* 竖着排 */
+        gap: 12px;
+        margin-top: 0; /* 去掉上边距 */
+        flex-wrap: wrap;
+      }
+      button,
+      select {
+        background: #3a3a3a;
+        color: white;
+        border: none;
+        padding: 16px 24px;
+        border-radius: 8px;
+        font-size: 20px;
+        width: 100%;
+        cursor: pointer;
+        transition: 0.2s;
+      }
+      select {
+        height: 60px;
+      }
+      button:hover {
+        background: #4a4a4a;
+      }
+      .output {
+        margin-top: auto; /* 推到底部 */
+        width: 100%;
+        background: #2a2a2a;
+        border-radius: 8px;
+        padding: 12px;
+      }
+      textarea {
+        width: 100%;
+        height: 200px; /* 加大高度 */
+        background: #1a1a1a;
+        color: #0f0;
+        border: 1px solid #444;
+        border-radius: 6px;
+        padding: 8px;
+        font-family: monospace;
+        font-size: 18px; /* 放大字体 */
+        resize: vertical;
+      }
+      .status {
+        color: #888;
+        font-size: 18px; /* 放大状态文字 */
+        margin-top: 4px;
+      }
+    </style>
+  </head>
+  <body>
+    <div class="editor-container">
+      <canvas id="editorCanvas" width="1080" height="1920"></canvas>
+
+      <div class="right-panel">
+        <!-- 新增右侧面板 -->
+        <div class="toolbar">
+          <button id="addCard">➕ 添加牌</button>
+          <button id="deleteCard">➖ 删除选中</button>
+          <!-- <button id="alignGrid">🎯 对齐网格(10px)</button> -->
+          <button id="copyPrevX">📋 复制上一张的X</button>
+          <button id="copyPrevY">📋 复制上一张的Y</button>
+
+          <div style="display: flex; gap: 8px; width: 100%">
+            <input
+              type="number"
+              id="gridSize"
+              value="10"
+              min="1"
+              max="100"
+              step="1"
+              style="
+                flex: 1;
+                padding: 16px;
+                font-size: 20px;
+                background: #2a2a2a;
+                color: white;
+                border: 1px solid #444;
+                border-radius: 8px;
+              "
+            />
+            <button id="alignGrid">对齐</button>
+          </div>
+
+          <select id="alignSelect">
+            <option value="left">左对齐</option>
+            <option value="right">右对齐</option>
+            <option value="top">上对齐</option>
+            <option value="bottom">下对齐</option>
+            <option value="hcenter">水平居中</option>
+            <option value="vcenter">垂直居中</option>
+          </select>
+          <button id="applyAlign">应用对齐</button>
+          <button id="copyPasteBtn">📋 复制粘贴</button>
+          <div style="display: flex; gap: 8px; width: 100%">
+            <button id="previewBtn" style="flex: 1">👁️ 预览模式</button>
+            <button id="cancelPreviewBtn" style="flex: 1">✖️ 取消预览</button>
+          </div>
+
+          <div style="display: flex; gap: 8px; width: 100%; margin-top: 8px">
+            <label
+              style="
+                color: white;
+                font-size: 18px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+              "
+            >
+              <input type="radio" name="zOrder" id="zBottomFirst" checked />
+              从底层开始（z从小到大）
+            </label>
+            <label
+              style="
+                color: white;
+                font-size: 18px;
+                display: flex;
+                align-items: center;
+                gap: 8px;
+              "
+            >
+              <input type="radio" name="zOrder" id="zTopFirst" />
+              从顶层开始（z从大到小）
+            </label>
+          </div>
+
+          <button id="importBtn">📥 导入坐标</button>
+          <textarea
+            id="importData"
+            placeholder="粘贴坐标数组，格式：[{x:100,y:100,z:1}, ...]"
+            style="display: none"
+          ></textarea>
+
+          <button id="outputCode">📤 生成代码</button>
+        </div>
+        <div class="output">
+          <textarea
+            id="codeOutput"
+            readonly
+            placeholder="点击'生成代码'查看关卡数据..."
+          ></textarea>
+          <div class="status" id="status">共 0 张牌 | 未选中</div>
+        </div>
+      </div>
+    </div>
+
+    <script>
+      // 变量区
+      const canvas = document.getElementById("editorCanvas");
+      const ctx = canvas.getContext("2d");
+
+      // 初始生成的牌的数据
+      let cards = [
+        {
+          x: 200,
+          y: 200,
+          z: 1,
+          selected: false,
+          imageFile: "type-1.png",
+          state: "onBoardVisible",
+        },
+        {
+          x: 300,
+          y: 300,
+          z: 2,
+          selected: false,
+          imageFile: "type-2.png",
+          state: "onBoardVisible",
+        },
+        {
+          x: 400,
+          y: 400,
+          z: 3,
+          selected: false,
+          imageFile: "type-3.png",
+          state: "onBoardVisible",
+        },
+      ];
+
+      let selectedCardIndex = -1; // -1 表示没选中
+      let dragOffsetX = 0,
+        dragOffsetY = 0; // 拖拽时鼠标和牌左上角的偏移
+
+      let ctrlPressed = false;
+
+      let isDraggingCard = false; // 是否正在拖拽牌
+      let isSelectingRect = false; // 是否正在拉框选
+      let rectStartX = 0,
+        rectStartY = 0; // 框选起点
+      let currentRect = null; // 存储当前框选的矩形
+
+      let dragStartPositions = []; // 存储拖拽开始时所有选中牌的 {x, y}
+
+      // 牌型库（20种，图片路径先占位）
+      const cardTypeLibrary = [];
+      for (let i = 1; i <= 20; i++) {
+        cardTypeLibrary.push({
+          typeId: `type-${i}`,
+          imageFile: `type-${i}.png`, // 图片路径，主子回头可以改
+        });
+      }
+
+      // 预览模式标志
+      let previewMode = false;
+
+      // 图片缓存
+      const imageCache = {};
+      let imagesLoaded = false;
+
+      // 判断两张牌是否在矩形内（矩形可能是负数，需要转成标准矩形）
+      function isCardInRect(card, rect) {
+        // 把可能负数的矩形转成标准矩形（x最小，y最小，宽高为正）
+        const left = Math.min(rect.x, rect.x + rect.w);
+        const right = Math.max(rect.x, rect.x + rect.w);
+        const top = Math.min(rect.y, rect.y + rect.h);
+        const bottom = Math.max(rect.y, rect.y + rect.h);
+
+        // 牌的边界（牌宽128，高128）
+        const cardLeft = card.x;
+        const cardRight = card.x + 128;
+        const cardTop = card.y;
+        const cardBottom = card.y + 128;
+
+        // 判断是否相交（只要碰到就算）
+        return (
+          cardRight > left &&
+          cardLeft < right &&
+          cardBottom > top &&
+          cardTop < bottom
+        );
+      }
+      // 渲染函数
+      function draw() {
+        ctx.clearRect(0, 0, 1080, 1920);
+
+        // 画个半透明网格（方便对齐）
+        ctx.strokeStyle = "rgba(255,255,255,1)";
+        ctx.lineWidth = 1;
+        for (let i = 0; i <= 1080; i += 60) {
+          ctx.beginPath();
+          ctx.moveTo(i, 0);
+          ctx.lineTo(i, 1920);
+          //   ctx.strokeStyle = "rgba(255,255,255,0.05)";
+          ctx.stroke();
+        }
+        for (let i = 0; i <= 1920; i += 60) {
+          ctx.beginPath();
+          ctx.moveTo(0, i);
+          ctx.lineTo(1080, i);
+          ctx.stroke();
+        }
+
+        // 次网格线（每10px一条，更淡一点）
+        ctx.strokeStyle = "rgba(255, 255, 255, 0.5)";
+        ctx.lineWidth = 0.5;
+        for (let i = 0; i <= 1080; i += 20) {
+          if (i % 50 !== 0) {
+            // 避免重复画主网格线
+            ctx.beginPath();
+            ctx.moveTo(i, 0);
+            ctx.lineTo(i, 1920);
+            ctx.stroke();
+          }
+        }
+        for (let i = 0; i <= 1920; i += 20) {
+          if (i % 50 !== 0) {
+            ctx.beginPath();
+            ctx.moveTo(0, i);
+            ctx.lineTo(1080, i);
+            ctx.stroke();
+          }
+        }
+
+        // 在 draw() 函数里，画完网格之后，画牌之前加上：
+
+        // ===== 画卡槽位置线 =====
+        const SLOT_START_Y = 1620;
+        ctx.strokeStyle = "#ff4444";
+        ctx.lineWidth = 3;
+        ctx.setLineDash([10, 10]); // 虚线，表示这是参考线
+        ctx.beginPath();
+        ctx.moveTo(0, SLOT_START_Y);
+        ctx.lineTo(1080, SLOT_START_Y);
+        ctx.stroke();
+
+        // 加个文字标注
+        ctx.setLineDash([]); // 恢复实线
+        ctx.font = "36px 'PingFang SC', sans-serif";
+        ctx.fillStyle = "#ff4444";
+        ctx.fillText("↑ 卡槽起始位置", 20, SLOT_START_Y - 20);
+
+        // 再画一条中心线（去掉卡槽影响后的新中心）
+        const GAME_AREA_BOTTOM = SLOT_START_Y;
+        const CENTER_Y = GAME_AREA_BOTTOM / 2; // 新中心Y坐标
+        ctx.strokeStyle = "#ff4444";
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(0, CENTER_Y);
+        ctx.lineTo(1080, CENTER_Y);
+        ctx.stroke();
+        ctx.fillStyle = "#ff4444";
+        ctx.fillText("游戏区域中心", 20, CENTER_Y - 20);
+        ctx.setLineDash([]);
+
+        // 在画完横线之后加竖线
+        const CENTER_X = 540; // 画布宽1080的一半
+        ctx.strokeStyle = "#ff4444";
+        ctx.setLineDash([10, 10]);
+        ctx.beginPath();
+        ctx.moveTo(CENTER_X, 0);
+        ctx.lineTo(CENTER_X, SLOT_START_Y); // 只画到卡槽位置
+        ctx.stroke();
+
+        // 可以加个交点标记
+        ctx.fillStyle = "#ff4444";
+        ctx.beginPath();
+        ctx.arc(CENTER_X, CENTER_Y, 10, 0, Math.PI * 2);
+        ctx.fill();
+
+        // 画所有牌
+        // 关键：按Z值从小到大排序（Z小的先画，在底层；Z大的后画，在上层）
+        const sortedCards = [...cards].sort((a, b) => a.z - b.z);
+
+        if (previewMode) {
+          // 先计算每张牌的遮罩状态
+          updatePreviewState(cards);
+          // 预览模式：走预览渲染
+          sortedCards.forEach((card) => {
+            // 1. 圆角矩形路径
+            ctx.beginPath();
+            ctx.moveTo(card.x + 10, card.y);
+            ctx.lineTo(card.x + 128 - 10, card.y);
+            ctx.quadraticCurveTo(
+              card.x + 128,
+              card.y,
+              card.x + 128,
+              card.y + 10,
+            );
+            ctx.lineTo(card.x + 128, card.y + 128 - 10);
+            ctx.quadraticCurveTo(
+              card.x + 128,
+              card.y + 128,
+              card.x + 128 - 10,
+              card.y + 128,
+            );
+            ctx.lineTo(card.x + 10, card.y + 128);
+            ctx.quadraticCurveTo(
+              card.x,
+              card.y + 128,
+              card.x,
+              card.y + 128 - 10,
+            );
+            ctx.lineTo(card.x, card.y + 10);
+            ctx.quadraticCurveTo(card.x, card.y, card.x + 10, card.y);
+            ctx.closePath();
+
+            // 2. 渐变背景
+            const gradient = ctx.createLinearGradient(
+              card.x,
+              card.y,
+              card.x + 128,
+              card.y + 128,
+            );
+            gradient.addColorStop(0, "#ffffff");
+            gradient.addColorStop(1, "#dcdcdc");
+            ctx.fillStyle = gradient;
+            ctx.fill();
+
+            // 3. 图片（从缓存取）
+            const img = imageCache[card.imageFile];
+            console.log(
+              `card: ${card.x},${card.y}, imageFile: ${card.imageFile}, img存在: ${!!img}, complete: ${img?.complete}`,
+            );
+            if (img && img.complete) {
+              const imgWidth = 128 * 0.7;
+              const imgHeight = 128 * 0.7;
+              const imgX = card.x + (128 - imgWidth) / 2;
+              const imgY = card.y + (128 - imgHeight) / 2;
+              ctx.drawImage(img, imgX, imgY, imgWidth, imgHeight);
+            } else {
+              // 图片还没加载完，先画个灰色占位
+              ctx.fillStyle = "#cccccc";
+              ctx.fillRect(card.x + 20, card.y + 20, 88, 88);
+              ctx.fillStyle = "#000";
+              ctx.font = "24px monospace";
+              ctx.fillText("⏳", card.x + 55, card.y + 70);
+            }
+
+            // 4. 灰蒙版（被遮住的牌）
+            if (card.state === "onBoardHidden") {
+              ctx.fillStyle = "rgba(130, 130, 138, 0.6)";
+              ctx.fill(); // 直接填充当前圆角矩形路径
+            }
+          });
+        } else {
+          sortedCards.forEach((card, index) => {
+            ctx.fillStyle = card.selected ? "#ffd700" : "#fff";
+
+            // 画牌背景
+            ctx.fillRect(card.x, card.y, 128, 128);
+
+            // 画牌边框
+            ctx.strokeStyle = "#000";
+            ctx.lineWidth = card.selected ? 3 : 1;
+            ctx.strokeRect(card.x, card.y, 128, 128);
+
+            // 显示坐标和z值（方便看）
+            ctx.fillStyle = "#000";
+            ctx.font = "36px 'PingFang SC', 'Microsoft YaHei', sans-serif";
+            // 改成：
+            ctx.fillText(`x:${card.x}`, card.x + 5, card.y + 35);
+            ctx.fillText(`y:${card.y}`, card.x + 5, card.y + 75);
+            ctx.fillText(`z:${card.z}`, card.x + 5, card.y + 115);
+          });
+        }
+
+        // 更新状态栏
+        document.getElementById("status").innerText =
+          `共 ${cards.length} 张牌 | ${selectedCardIndex >= 0 ? "已选中第" + (selectedCardIndex + 1) + "张" : "未选中"}`;
+      }
+
+      // 鼠标按下
+      canvas.addEventListener("mousedown", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+
+        // 从最上层（z最大的）开始找，这样能选中上面的牌
+        let found = -1;
+        for (let i = cards.length - 1; i >= 0; i--) {
+          const card = cards[i];
+          if (
+            mouseX >= card.x &&
+            mouseX <= card.x + 128 &&
+            mouseY >= card.y &&
+            mouseY <= card.y + 128
+          ) {
+            found = i;
+            break;
+          }
+        }
+
+        if (found >= 0) {
+          // 点到了牌：准备拖拽
+          isDraggingCard = true;
+          isSelectingRect = false;
+          if (ctrlPressed) {
+            // Ctrl多选：切换当前牌的选中状态
+            cards[found].selected = !cards[found].selected;
+            // 如果当前牌被选中了，selectedCardIndex 就指向它
+            // 如果被取消了，selectedCardIndex 需要重新找一个选中的牌
+            if (cards[found].selected) {
+              selectedCardIndex = found;
+            } else {
+              // 找最后一个选中的牌
+              selectedCardIndex = -1;
+              for (let i = cards.length - 1; i >= 0; i--) {
+                if (cards[i].selected) {
+                  selectedCardIndex = i;
+                  break;
+                }
+              }
+            }
+          } else {
+            // 普通点击
+            // 非 Ctrl
+            if (cards[found].selected) {
+              // 点中的牌已经选中：什么都不做，保留当前多选状态
+              // selectedCardIndex 保持原来的不变
+            } else {
+              // 点中的牌未选中：清空其他，只选中这张
+              cards.forEach((c) => (c.selected = false));
+              cards[found].selected = true;
+              selectedCardIndex = found;
+            }
+          }
+
+          // 拖拽开始前，记录所有选中牌的原始位置
+          dragStartPositions = cards
+            .filter((c) => c.selected)
+            .map((c) => ({ x: c.x, y: c.y }));
+
+          // 更新拖拽偏移量
+          dragOffsetX = mouseX - cards[found].x;
+          dragOffsetY = mouseY - cards[found].y;
+        } else {
+          // 点空白区域：只有没按 Ctrl 时才清空选中
+          // 点到了空白处：准备拉框选
+          isDraggingCard = false;
+          isSelectingRect = true;
+          rectStartX = mouseX;
+          rectStartY = mouseY;
+          if (!ctrlPressed) {
+            cards.forEach((c) => (c.selected = false));
+            selectedCardIndex = -1;
+          }
+          // 如果按着 Ctrl 点空白，什么都不做（保留当前选中状态）
+        }
+
+        draw();
+      });
+
+      //鼠标拖动
+      canvas.addEventListener("mousemove", (e) => {
+        const rect = canvas.getBoundingClientRect();
+        const scaleX = canvas.width / rect.width;
+        const scaleY = canvas.height / rect.height;
+        const mouseX = (e.clientX - rect.left) * scaleX;
+        const mouseY = (e.clientY - rect.top) * scaleY;
+
+        // 拖拽牌
+        if (selectedCardIndex >= 0 && isDraggingCard) {
+          // 更新牌的位置，但要保证不超出画布
+          // 当前正在拖拽的牌（被鼠标点中的那张）
+          const currentCard = cards[selectedCardIndex];
+          const newX = Math.max(0, Math.min(1080 - 128, mouseX - dragOffsetX));
+          const newY = Math.max(0, Math.min(1920 - 128, mouseY - dragOffsetY));
+          const deltaX = newX - currentCard.x;
+          const deltaY = newY - currentCard.y;
+
+          // 所有选中的牌一起移动
+          cards.forEach((card) => {
+            if (card.selected) {
+              card.x = Math.max(0, Math.min(1080 - 128, card.x + deltaX));
+              card.y = Math.max(0, Math.min(1920 - 128, card.y + deltaY));
+            }
+          });
+
+          draw();
+          return;
+        }
+
+        if (isSelectingRect) {
+          // 先正常画所有东西
+          draw();
+
+          // 再在 canvas 上叠加画框选矩形（注意：draw 会清空画布，所以要后画）
+          const width = mouseX - rectStartX;
+          const height = mouseY - rectStartY;
+
+          ctx.save();
+          ctx.strokeStyle = "#44aaff";
+          ctx.fillStyle = "rgba(68, 170, 255, 0.2)";
+          ctx.lineWidth = 2;
+          ctx.setLineDash([5, 5]);
+          ctx.strokeRect(rectStartX, rectStartY, width, height);
+          ctx.fillRect(rectStartX, rectStartY, width, height);
+          ctx.setLineDash([]);
+          ctx.restore();
+
+          // 保存当前矩形范围，供 mouseup 使用
+          currentRect = { x: rectStartX, y: rectStartY, w: width, h: height };
+        }
+        // draw();
+      });
+
+      //鼠标松开
+      canvas.addEventListener("mouseup", () => {
+        // 如果是框选模式，处理选中的牌
+        if (isSelectingRect && currentRect) {
+          cards.forEach((card) => {
+            const isIn = isCardInRect(card, currentRect);
+            if (isIn) {
+              if (ctrlPressed) {
+                // 按着 Ctrl：切换选中状态
+                card.selected = !card.selected;
+              } else {
+                // 没按 Ctrl：全部选中
+                card.selected = true;
+              }
+            }
+          });
+
+          // 如果没按 Ctrl，还要把框外的牌取消选中
+          if (!ctrlPressed) {
+            cards.forEach((card) => {
+              if (!isCardInRect(card, currentRect)) {
+                card.selected = false;
+              }
+            });
+          }
+
+          // 新增：找到最后一张选中的牌（用于后续操作）
+          selectedCardIndex = -1;
+          for (let i = cards.length - 1; i >= 0; i--) {
+            if (cards[i].selected) {
+              selectedCardIndex = i;
+              break;
+            }
+          }
+        }
+
+        // 重置标志
+        isDraggingCard = false;
+        isSelectingRect = false;
+        currentRect = null;
+        draw();
+      });
+
+      //鼠标离开画布
+      canvas.addEventListener("mouseleave", () => {
+        // 鼠标离开画布，取消拖拽（但保留选中）
+        selectedCardIndex = -1; // 这里可以改，暂时先这样
+        draw();
+      });
+
+      // 添加新牌
+      document.getElementById("addCard").addEventListener("click", () => {
+        const newType = getRandomCardType();
+        cards.push({
+          x: 540 - 64,
+          y: 810 - 64,
+          z: 0,
+          selected: false,
+          imageFile: newType.imageFile, // 新增
+          state: "onBoardVisible", // 新增，预览时用
+        });
+
+        // 根据选择的顺序重新计算z
+        const isBottomFirst = document.getElementById("zBottomFirst").checked;
+        cards.forEach((card, index) => {
+          if (isBottomFirst) {
+            card.z = index + 1; // 先加的z小（底层）
+          } else {
+            card.z = cards.length - index; // 先加的z大（顶层）
+          }
+        });
+
+        draw();
+      });
+
+      // 删除选中
+      document.getElementById("deleteCard").addEventListener("click", () => {
+        if (selectedCardIndex >= 0) {
+          cards.splice(selectedCardIndex, 1);
+          // 重新排z
+          const isBottomFirst = document.getElementById("zBottomFirst").checked;
+          cards.forEach((card, index) => {
+            if (isBottomFirst) {
+              card.z = index + 1;
+            } else {
+              card.z = cards.length - index;
+            }
+          });
+          selectedCardIndex = -1;
+          draw();
+        }
+      });
+
+      // 对齐网格（自定义px）
+      document.getElementById("alignGrid").addEventListener("click", () => {
+        const gridSize =
+          parseInt(document.getElementById("gridSize").value) || 10;
+        cards.forEach((card) => {
+          card.x = Math.round(card.x / gridSize) * gridSize;
+          card.y = Math.round(card.y / gridSize) * gridSize;
+        });
+        // 同步 selectedCardIndex
+        selectedCardIndex = -1;
+        for (let i = cards.length - 1; i >= 0; i--) {
+          if (cards[i].selected) {
+            selectedCardIndex = i;
+            break;
+          }
+        }
+        draw();
+        // console.log(selectedCardIndex, cards[selectedCardIndex]);
+      });
+
+      // 复制上一张的X
+      document.getElementById("copyPrevX").addEventListener("click", () => {
+        if (selectedCardIndex > 0) {
+          cards[selectedCardIndex].x = cards[selectedCardIndex - 1].x;
+          draw();
+        }
+      });
+
+      // 复制上一张的Y
+      document.getElementById("copyPrevY").addEventListener("click", () => {
+        if (selectedCardIndex > 0) {
+          cards[selectedCardIndex].y = cards[selectedCardIndex - 1].y;
+          draw();
+        }
+      });
+
+      // 应用对齐（非网格对齐，牌相对于牌的对齐）
+      document.getElementById("applyAlign").addEventListener("click", () => {
+        if (selectedCardIndex < 0) return;
+
+        const alignType = document.getElementById("alignSelect").value;
+        const targetCard = cards[selectedCardIndex];
+
+        // 简单版：把所有选中牌（其实现在只有一张能选中）对到某条线
+        // 这里应该支持多选，但先做个简单的
+        cards.forEach((card) => {
+          if (card.selected) {
+            switch (alignType) {
+              case "left":
+                card.x = targetCard.x;
+                break;
+              case "right":
+                card.x = targetCard.x + 128 - 128;
+                break; // 其实和left一样
+              case "top":
+                card.y = targetCard.y;
+                break;
+              case "bottom":
+                card.y = targetCard.y + 128 - 128;
+                break;
+              case "hcenter":
+                card.y = targetCard.y;
+                break; // 水平居中其实是Y相同
+              case "vcenter":
+                card.x = targetCard.x;
+                break; // 垂直居中是X相同
+            }
+          }
+        });
+        draw();
+      });
+
+      // 生成代码
+      document.getElementById("outputCode").addEventListener("click", () => {
+        const code = cards
+          .map((card) => `  { x: ${card.x}, y: ${card.y}, z: ${card.z} }`)
+          .join(",\n");
+
+        document.getElementById("codeOutput").value = `[\n${code}\n]`;
+      });
+
+      //导入代码
+      document.getElementById("importBtn").addEventListener("click", () => {
+        const rawData = prompt(
+          "请粘贴坐标数组：\n例如：[{x:100,y:100,z:1}, {x:200,y:200,z:2}]",
+        );
+        if (!rawData) return;
+
+        try {
+          // 解析用户粘贴的数组
+          const importedCards = eval("(" + rawData + ")");
+
+          if (Array.isArray(importedCards)) {
+            // 替换当前所有牌
+            cards = importedCards.map((card) => ({
+              x: card.x,
+              y: card.y,
+              z: card.z,
+              selected: false,
+            }));
+
+            // // 更新计数器（取最大z+1作为下一个z）
+            // const maxZ = Math.max(...cards.map((c) => c.z), 0);
+            // nextZ = maxZ + 1;
+
+            draw();
+            alert(`导入成功！共 ${cards.length} 张牌～`);
+          } else {
+            alert("格式不对哦，要是个数组～");
+          }
+        } catch (e) {
+          alert("解析失败，检查一下格式？\n" + e.message);
+        }
+      });
+
+      //检测ctrl的按下
+      window.addEventListener("keydown", (e) => {
+        if (e.key === "Control") {
+          ctrlPressed = true;
+        }
+      });
+
+      //检测ctrl的放开
+      window.addEventListener("keyup", (e) => {
+        if (e.key === "Control") {
+          ctrlPressed = false;
+        }
+      });
+
+      //检测离开窗口的ctrl
+      window.addEventListener("blur", () => {
+        ctrlPressed = false; // 窗口失去焦点时重置
+      });
+
+      //复制粘贴牌
+      document.getElementById("copyPasteBtn").addEventListener("click", () => {
+        // 1. 找出所有选中的牌
+        const selectedCards = cards.filter((card) => card.selected);
+
+        // 2. 没有选中就提示
+        if (selectedCards.length === 0) {
+          // alert("亲，请先选中要复制的牌～");
+          return;
+        }
+
+        // 1. 找出当前最大 z 值
+        const maxZ = Math.max(...cards.map((c) => c.z), 0);
+
+        // 2. 按原 z 从小到大排序（保持相对顺序）
+        const sortedSelected = [...selectedCards].sort((a, b) => a.z - b.z);
+
+        // 3. 准备新牌数组
+        const newCards = [];
+        let nextZ = maxZ + 1;
+
+        for (const card of sortedSelected) {
+          const newType = getRandomCardType(); // 随机获取牌型
+          newCards.push({
+            x: card.x + 30,
+            y: card.y + 30,
+            z: nextZ++,
+            selected: false,
+            imageFile: newType.imageFile,
+            state: "onBoardVisible",
+          });
+        }
+
+        // 4. 把原牌选中状态取消
+        cards.forEach((card) => {
+          if (card.selected) {
+            card.selected = false;
+          }
+        });
+
+        // 5. 把新牌加入 cards 数组
+        cards.push(...newCards);
+
+        // 6. 把新牌设为选中状态
+        newCards.forEach((card) => {
+          card.selected = true;
+        });
+
+        // 7. 更新 selectedCardIndex 为最后一张新牌
+        selectedCardIndex = cards.length - 1;
+
+        // 8. 重绘
+        draw();
+
+        // alert(`成功复制粘贴 ${newCards.length} 张牌～`);
+      });
+
+      // 工具函数：随机获取一个牌型（预览模式）
+      function getRandomCardType() {
+        const index = Math.floor(Math.random() * cardTypeLibrary.length);
+        return cardTypeLibrary[index];
+      }
+
+      //预览按钮
+      document.getElementById("previewBtn").addEventListener("click", () => {
+        previewMode = true;
+        draw();
+      });
+
+      //取消预览按钮
+      document
+        .getElementById("cancelPreviewBtn")
+        .addEventListener("click", () => {
+          previewMode = false;
+          draw();
+        });
+
+      // 计算预览模式下每张牌的 state（被遮住 or 可见）
+      function updatePreviewState(cards) {
+        const sorted = [...cards].sort((a, b) => a.z - b.z);
+
+        for (let i = 0; i < sorted.length; i++) {
+          const lowerCard = sorted[i];
+          let isVisible = true;
+
+          for (let j = i + 1; j < sorted.length; j++) {
+            const higherCard = sorted[j];
+            // 判断是否重叠
+            const overlap = !(
+              higherCard.x + 128 <= lowerCard.x ||
+              higherCard.x >= lowerCard.x + 128 ||
+              higherCard.y + 128 <= lowerCard.y ||
+              higherCard.y >= lowerCard.y + 128
+            );
+            if (overlap) {
+              isVisible = false;
+              break;
+            }
+          }
+
+          lowerCard.state = isVisible ? "onBoardVisible" : "onBoardHidden";
+        }
+      }
+
+      // 预加载所有牌型图片
+      function loadImages() {
+        const promises = cardTypeLibrary.map((type) => {
+          return new Promise((resolve) => {
+            const img = new Image();
+            img.src = `images/${type.imageFile}`;
+            img.onload = () => {
+              imageCache[type.imageFile] = img;
+              resolve();
+            };
+            img.onerror = () => {
+              console.log(`❌ 加载失败: ${type.imageFile}`);
+              resolve(); // 失败也继续
+            };
+          });
+        });
+
+        Promise.all(promises).then(() => {
+          imagesLoaded = true;
+          draw(); // 图片加载完重新画一次
+          console.log("✅ 所有图片加载完成");
+        });
+      }
+
+      // 页面加载时调用
+      loadImages();
+
+      // 初始化
+      draw();
+    </script>
+  </body>
+</html>
